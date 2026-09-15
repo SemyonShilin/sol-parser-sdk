@@ -857,6 +857,16 @@ pub struct PumpSwapBuyEvent {
     pub fee_recipient: Pubkey,
     #[borsh(skip)]
     pub fee_recipient_quote_token_account: Pubkey,
+    /// The top-level (outer) instruction's program id — i.e. the program the
+    /// wallet/caller directly invoked, regardless of how deeply nested this
+    /// event's own pAMM instruction is. Equals `PUMPSWAP_PROGRAM` for a
+    /// direct call; differs when a third-party bundler/router/aggregator
+    /// CPIs into pAMM. Data-collection field added 2026-09-15 — not yet
+    /// consumed by any filter, see docs/IMPROVEMENT_PLAN.md 5.18 in the
+    /// flash_loan_bot repo.
+    #[borsh(skip)]
+    #[serde(default)]
+    pub outer_program_id: Pubkey,
 }
 
 /// PumpSwap Sell Event
@@ -934,6 +944,10 @@ pub struct PumpSwapSellEvent {
     pub fee_recipient: Pubkey,
     #[borsh(skip)]
     pub fee_recipient_quote_token_account: Pubkey,
+    /// See `PumpSwapBuyEvent::outer_program_id`.
+    #[borsh(skip)]
+    #[serde(default)]
+    pub outer_program_id: Pubkey,
 }
 
 /// PumpSwap Create Pool Event
@@ -975,6 +989,15 @@ pub struct PumpSwapCreatePoolEvent {
     /// Whether creator fees are distributed to holders.
     #[serde(default)]
     pub is_holder_reward: bool,
+    /// The top-level (outer) instruction's program id — i.e. the program the
+    /// wallet/caller directly invoked, regardless of how deeply nested this
+    /// event's own pAMM instruction is. Equals `PUMPSWAP_PROGRAM` for a
+    /// direct call; differs when a third-party bundler/router/aggregator
+    /// CPIs into pAMM. Data-collection field added 2026-09-15 — not yet
+    /// consumed by any filter, see docs/IMPROVEMENT_PLAN.md 5.18 in the
+    /// flash_loan_bot repo.
+    #[serde(default)]
+    pub outer_program_id: Pubkey,
 }
 
 /// PumpSwap Pool Created Event - 指令解析版本

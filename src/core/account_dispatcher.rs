@@ -117,6 +117,47 @@ fn find_pumpfun_create_invoke<'a>(
         .or_else(|| invokes.iter().find(|(_, inner_idx)| *inner_idx < 0))
 }
 
+/// Resolve the top-level (outer) instruction's program id for a given
+/// invoke. `invoke.0` always indexes the transaction's top-level
+/// `message.instructions`, even when the event's own instruction was an
+/// inner one (`invoke.1 >= 0`) — so this tells us which program the wallet/
+/// caller directly invoked, regardless of how deeply the pAMM call is
+/// nested. Data-collection helper (2026-09-15): lets a bundler/router/
+/// aggregator CPI-ing into pAMM be distinguished from a direct call,
+/// without any extra RPC round-trip — see docs/IMPROVEMENT_PLAN.md 5.18 in
+/// the flash_loan_bot repo for the motivating case and intended use.
+fn resolve_outer_program_id(
+    transaction: &Option<Transaction>,
+    account_keys: Option<&Vec<Vec<u8>>>,
+    loaded_writable_addresses: &[Vec<u8>],
+    loaded_readonly_addresses: &[Vec<u8>],
+    outer_idx: i32,
+) -> Pubkey {
+    let Some(program_id_index) = transaction
+        .as_ref()
+        .and_then(|tx| tx.message.as_ref())
+        .and_then(|msg| msg.instructions.get(outer_idx as usize))
+        .map(|ix| ix.program_id_index as usize)
+    else {
+        return Pubkey::default();
+    };
+    let Some(keys) = account_keys else {
+        return Pubkey::default();
+    };
+    if let Some(key_bytes) = keys.get(program_id_index) {
+        return crate::instr::utils::read_pubkey_fast(key_bytes);
+    }
+    let writable_offset = program_id_index.saturating_sub(keys.len());
+    if let Some(key_bytes) = loaded_writable_addresses.get(writable_offset) {
+        return crate::instr::utils::read_pubkey_fast(key_bytes);
+    }
+    let readonly_offset = writable_offset.saturating_sub(loaded_writable_addresses.len());
+    loaded_readonly_addresses
+        .get(readonly_offset)
+        .map(|key_bytes| crate::instr::utils::read_pubkey_fast(key_bytes))
+        .unwrap_or_default()
+}
+
 /// 通用填充辅助宏
 macro_rules! fill_event_accounts {
     ($event:expr, $meta:expr, $tx:expr, $invokes:expr, $program_id:expr, $filler:expr) => {
@@ -288,31 +329,59 @@ fn fill_accounts_with_lookup<L: InvokeLookup + ?Sized>(
         // PumpSwap
         DexEvent::PumpSwapBuy(e) => {
             let pool = e.pool;
-            fill_event_accounts_anchored!(
-                e,
-                meta,
-                transaction,
-                program_invokes,
-                &PUMPSWAP_PROGRAM,
-                &pool,
-                |get: &AccountGetter<'_>| {
-                    account_fillers::pumpswap::fill_buy_accounts(e, get);
+            if let Some(invokes) = program_invokes.get_invokes(&PUMPSWAP_PROGRAM) {
+                let account_keys =
+                    transaction.as_ref().and_then(|tx| tx.message.as_ref()).map(|msg| &msg.account_keys);
+                if let Some(invoke) =
+                    find_instruction_invoke_anchored(invokes, meta, transaction, account_keys, 0, &pool)
+                {
+                    e.outer_program_id = resolve_outer_program_id(
+                        transaction,
+                        account_keys,
+                        &meta.loaded_writable_addresses,
+                        &meta.loaded_readonly_addresses,
+                        invoke.0,
+                    );
+                    if let Some(get_account) = get_instruction_account_getter(
+                        meta,
+                        transaction,
+                        account_keys,
+                        &meta.loaded_writable_addresses,
+                        &meta.loaded_readonly_addresses,
+                        invoke,
+                    ) {
+                        account_fillers::pumpswap::fill_buy_accounts(e, &get_account);
+                    }
                 }
-            );
+            }
         }
         DexEvent::PumpSwapSell(e) => {
             let pool = e.pool;
-            fill_event_accounts_anchored!(
-                e,
-                meta,
-                transaction,
-                program_invokes,
-                &PUMPSWAP_PROGRAM,
-                &pool,
-                |get: &AccountGetter<'_>| {
-                    account_fillers::pumpswap::fill_sell_accounts(e, get);
+            if let Some(invokes) = program_invokes.get_invokes(&PUMPSWAP_PROGRAM) {
+                let account_keys =
+                    transaction.as_ref().and_then(|tx| tx.message.as_ref()).map(|msg| &msg.account_keys);
+                if let Some(invoke) =
+                    find_instruction_invoke_anchored(invokes, meta, transaction, account_keys, 0, &pool)
+                {
+                    e.outer_program_id = resolve_outer_program_id(
+                        transaction,
+                        account_keys,
+                        &meta.loaded_writable_addresses,
+                        &meta.loaded_readonly_addresses,
+                        invoke.0,
+                    );
+                    if let Some(get_account) = get_instruction_account_getter(
+                        meta,
+                        transaction,
+                        account_keys,
+                        &meta.loaded_writable_addresses,
+                        &meta.loaded_readonly_addresses,
+                        invoke,
+                    ) {
+                        account_fillers::pumpswap::fill_sell_accounts(e, &get_account);
+                    }
                 }
-            );
+            }
         }
         DexEvent::PumpSwapTrade(e) => {
             fill_event_accounts!(
@@ -327,16 +396,31 @@ fn fill_accounts_with_lookup<L: InvokeLookup + ?Sized>(
             );
         }
         DexEvent::PumpSwapCreatePool(e) => {
-            fill_event_accounts!(
-                e,
-                meta,
-                transaction,
-                program_invokes,
-                &PUMPSWAP_PROGRAM,
-                |get: &AccountGetter<'_>| {
-                    account_fillers::pumpswap::fill_create_pool_accounts(e, get);
+            if let Some(invokes) = program_invokes.get_invokes(&PUMPSWAP_PROGRAM) {
+                if let Some(invoke) = find_instruction_invoke(invokes, meta, transaction) {
+                    let account_keys = transaction
+                        .as_ref()
+                        .and_then(|tx| tx.message.as_ref())
+                        .map(|msg| &msg.account_keys);
+                    e.outer_program_id = resolve_outer_program_id(
+                        transaction,
+                        account_keys,
+                        &meta.loaded_writable_addresses,
+                        &meta.loaded_readonly_addresses,
+                        invoke.0,
+                    );
+                    if let Some(get_account) = get_instruction_account_getter(
+                        meta,
+                        transaction,
+                        account_keys,
+                        &meta.loaded_writable_addresses,
+                        &meta.loaded_readonly_addresses,
+                        invoke,
+                    ) {
+                        account_fillers::pumpswap::fill_create_pool_accounts(e, &get_account);
+                    }
                 }
-            );
+            }
         }
         DexEvent::PumpSwapLiquidityAdded(e) => {
             fill_event_accounts!(

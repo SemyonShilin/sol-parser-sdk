@@ -445,6 +445,7 @@ fn parse_create_pool_event_optimized(
             creator_fee_bps,
             can_edit_creator_fee,
             is_holder_reward,
+            ..Default::default()
         }))
     }
 }
@@ -851,6 +852,7 @@ pub fn parse_create_pool_from_data(data: &[u8], metadata: EventMetadata) -> Opti
             creator_fee_bps,
             can_edit_creator_fee,
             is_holder_reward,
+            ..Default::default()
         }))
     }
 }
