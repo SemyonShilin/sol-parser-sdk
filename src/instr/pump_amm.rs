@@ -5,7 +5,58 @@
 use super::program_ids;
 use super::utils::*;
 use crate::core::events::*;
-use solana_sdk::{pubkey::Pubkey, signature::Signature};
+use solana_sdk::{pubkey, pubkey::Pubkey, signature::Signature};
+
+/// Classic SPL Token program.
+const TOKEN_PROGRAM: Pubkey = pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+/// SPL Token-2022 program (pump.fun "Mayhem mode" base mints).
+const TOKEN_2022_PROGRAM: Pubkey = pubkey!("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+
+/// 2026-09-15 BUGFIX: the IDL's fixed account list (base_token_program at 11,
+/// quote_token_program at 12 — confirmed against pump-fun/pump-public-docs)
+/// only holds when the CPI needs no extra "remaining accounts". A Token-2022
+/// base mint with a transfer-hook extension makes the on-chain program append
+/// extra accounts (observed: exactly 4, e.g. the hook program + its state) —
+/// undocumented in the IDL (remaining_accounts are never part of an Anchor
+/// IDL's declared account list), which silently shifts every fixed index
+/// after the insertion point. Root-caused live: a real Mayhem-mode buy's
+/// `base_token_program`/`quote_token_program` (read at 11/12) came out as the
+/// pool's `event_authority`/the program ID itself — the *real* values were
+/// sitting 4 slots later, at what the fixed layout calls 15/16
+/// (event_authority/program). Rather than hardcode "+4" (a hook can plausibly
+/// need a different account count), scan outward from the expected pair for
+/// the first adjacent (idx, idx+1) whose values are BOTH a known token
+/// program — validating the pair together avoids a false match on some
+/// unrelated account that happens to equal one of the two constants.
+fn resolve_token_program_pair(
+    accounts: &[Pubkey],
+    expected_base_idx: usize,
+) -> (Pubkey, Pubkey) {
+    let is_token_program = |pk: &Pubkey| *pk == TOKEN_PROGRAM || *pk == TOKEN_2022_PROGRAM;
+    let fallback_base = accounts.get(expected_base_idx).copied().unwrap_or_default();
+    let fallback_quote = accounts.get(expected_base_idx + 1).copied().unwrap_or_default();
+    if is_token_program(&fallback_base) && is_token_program(&fallback_quote) {
+        return (fallback_base, fallback_quote);
+    }
+    // Search a bounded window — real transfer-hook insertions are a handful
+    // of accounts, not dozens; an unbounded scan risks matching unrelated
+    // token-program references elsewhere in a long account list.
+    const MAX_SHIFT: usize = 12;
+    for shift in 1..=MAX_SHIFT {
+        let idx = expected_base_idx + shift;
+        let Some(base) = accounts.get(idx) else { break };
+        let Some(quote) = accounts.get(idx + 1) else { break };
+        if is_token_program(base) && is_token_program(quote) {
+            return (*base, *quote);
+        }
+    }
+    // No valid pair found anywhere in range — return the (wrong) values at
+    // the declared position rather than a hard failure; downstream code
+    // already treats an implausible token program as reason to reject the
+    // trade, which is the correct fail-closed behavior when this can't be
+    // resolved at all.
+    (fallback_base, fallback_quote)
+}
 
 /// PumpSwap instruction discriminator constants (from pump_amm.json)
 pub mod discriminators {
@@ -139,6 +190,7 @@ fn parse_buy_instruction(
     };
 
     let metadata = create_metadata(signature, slot, tx_index, block_time_us.unwrap_or_default(), 0);
+    let (base_token_program, quote_token_program) = resolve_token_program_pair(accounts, 11);
 
     let mut ev = PumpSwapBuyEvent {
         metadata,
@@ -152,8 +204,8 @@ fn parse_buy_instruction(
         pool_quote_token_account: get_account(accounts, 8).unwrap_or_default(),
         protocol_fee_recipient: get_account(accounts, 9).unwrap_or_default(),
         protocol_fee_recipient_token_account: get_account(accounts, 10).unwrap_or_default(),
-        base_token_program: get_account(accounts, 11).unwrap_or_default(),
-        quote_token_program: get_account(accounts, 12).unwrap_or_default(),
+        base_token_program,
+        quote_token_program,
         base_amount_out: base_amount,
         max_quote_amount_in: quote_amount,
         ..Default::default()
@@ -195,6 +247,7 @@ fn parse_buy_exact_quote_in_instruction(
     };
 
     let metadata = create_metadata(signature, slot, tx_index, block_time_us.unwrap_or_default(), 0);
+    let (base_token_program, quote_token_program) = resolve_token_program_pair(accounts, 11);
 
     let mut ev = PumpSwapBuyEvent {
         metadata,
@@ -208,8 +261,8 @@ fn parse_buy_exact_quote_in_instruction(
         pool_quote_token_account: get_account(accounts, 8).unwrap_or_default(),
         protocol_fee_recipient: get_account(accounts, 9).unwrap_or_default(),
         protocol_fee_recipient_token_account: get_account(accounts, 10).unwrap_or_default(),
-        base_token_program: get_account(accounts, 11).unwrap_or_default(),
-        quote_token_program: get_account(accounts, 12).unwrap_or_default(),
+        base_token_program,
+        quote_token_program,
         base_amount_out: base_amount,
         max_quote_amount_in: quote_amount,
         ..Default::default()
@@ -256,6 +309,7 @@ fn parse_sell_instruction(
     };
 
     let metadata = create_metadata(signature, slot, tx_index, block_time_us.unwrap_or_default(), 0);
+    let (base_token_program, quote_token_program) = resolve_token_program_pair(accounts, 11);
 
     let mut ev = PumpSwapSellEvent {
         metadata,
@@ -269,8 +323,8 @@ fn parse_sell_instruction(
         pool_quote_token_account: get_account(accounts, 8).unwrap_or_default(),
         protocol_fee_recipient: get_account(accounts, 9).unwrap_or_default(),
         protocol_fee_recipient_token_account: get_account(accounts, 10).unwrap_or_default(),
-        base_token_program: get_account(accounts, 11).unwrap_or_default(),
-        quote_token_program: get_account(accounts, 12).unwrap_or_default(),
+        base_token_program,
+        quote_token_program,
         base_amount_in: base_amount,
         min_quote_amount_out: quote_amount,
         ..Default::default()
