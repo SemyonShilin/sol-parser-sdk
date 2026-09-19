@@ -457,6 +457,13 @@ fn parse_inner_instruction(
             }
         }
         all_inner::meteora_damm::parse(&discriminator, inner_data, metadata)
+    } else if *program_id == program_ids::METEORA_DBC_PROGRAM_ID {
+        if let Some(f) = filter {
+            if !f.includes_meteora_dbc() {
+                return None;
+            }
+        }
+        all_inner::meteora_dbc::parse(&discriminator, inner_data, metadata)
     } else if *program_id == program_ids::METEORA_DLMM_PROGRAM_ID {
         if let Some(f) = filter {
             if !f.includes_meteora_dlmm() {
@@ -638,6 +645,7 @@ fn should_parse_instructions(filter: Option<&EventTypeFilter>) -> bool {
         || filter.includes_orca_whirlpool()
         || filter.includes_meteora_pools()
         || filter.includes_meteora_damm_v2()
+        || filter.includes_meteora_dbc()
         || filter.includes_meteora_dlmm()
 }
 
