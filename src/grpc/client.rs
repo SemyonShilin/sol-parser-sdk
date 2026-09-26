@@ -20,7 +20,7 @@ use futures::{SinkExt, StreamExt};
 use log::error;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, Notify};
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant};
 // Note: ClientTlsConfig moved to yellowstone_grpc_client in newer versions
@@ -53,6 +53,9 @@ pub struct YellowstoneGrpc {
     subscription_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     subscription_lifecycle: Arc<Mutex<()>>,
     stop_signal: Arc<Mutex<Option<Arc<AtomicBool>>>>,
+    /// Signalled after events land in the queue, so a consumer can await new
+    /// events instead of busy-polling `ArrayQueue::pop` (see [`Self::event_notify`]).
+    event_notify: Arc<Notify>,
 }
 
 impl YellowstoneGrpc {
@@ -69,6 +72,7 @@ impl YellowstoneGrpc {
             subscription_handle: Arc::new(Mutex::new(None)),
             subscription_lifecycle: Arc::new(Mutex::new(())),
             stop_signal: Arc::new(Mutex::new(None)),
+            event_notify: Arc::new(Notify::new()),
         })
     }
 
@@ -86,7 +90,27 @@ impl YellowstoneGrpc {
             subscription_handle: Arc::new(Mutex::new(None)),
             subscription_lifecycle: Arc::new(Mutex::new(())),
             stop_signal: Arc::new(Mutex::new(None)),
+            event_notify: Arc::new(Notify::new()),
         })
+    }
+
+    /// Wake-up handle for the event queue returned by [`Self::subscribe_dex_events`].
+    ///
+    /// `notify_one` fires after each stream update that leaves events in the
+    /// queue. A consumer drains the queue with `pop()` until empty and then
+    /// awaits `notified()`; `notify_one` stores a permit when nobody is
+    /// waiting, so events pushed during a drain are never missed. The handle
+    /// is shared by every subscription of this client, so it stays valid
+    /// across resubscribes (a stale permit only costs one empty drain).
+    pub fn event_notify(&self) -> Arc<Notify> {
+        Arc::clone(&self.event_notify)
+    }
+
+    #[inline]
+    fn signal_events(&self, queue: &ArrayQueue<DexEvent>) {
+        if !queue.is_empty() {
+            self.event_notify.notify_one();
+        }
     }
 
     /// 订阅 DEX 事件（自动重连）
@@ -260,6 +284,7 @@ impl YellowstoneGrpc {
                                 update, order_mode, event_filter, queue,
                                 &mut slot_buffer, &mut micro_batch, &mut last_slot, batch_us
                             );
+                            self.signal_events(queue);
                         }
                         Some(Err(e)) => {
                             error!("Grpc Stream error: {:?}", e);
@@ -269,6 +294,7 @@ impl YellowstoneGrpc {
                                 &mut micro_batch,
                                 queue,
                             );
+                            self.signal_events(queue);
                             self.control_tx.lock().await.take();
                             return Err(e.to_string());
                         }
@@ -279,6 +305,7 @@ impl YellowstoneGrpc {
                                 &mut micro_batch,
                                 queue,
                             );
+                            self.signal_events(queue);
                             self.control_tx.lock().await.take();
                             return Ok(());
                         }
@@ -301,6 +328,7 @@ impl YellowstoneGrpc {
                         &mut next_check,
                         check_interval,
                     );
+                    self.signal_events(queue);
                 }
             }
         }

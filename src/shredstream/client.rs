@@ -12,7 +12,7 @@ use crossbeam_queue::ArrayQueue;
 use futures::StreamExt;
 use solana_entry::entry::Entry as SolanaEntry;
 use solana_sdk::message::VersionedMessage;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinHandle;
 use tonic::transport::{Channel, Endpoint};
 
@@ -25,7 +25,7 @@ use crate::DexEvent;
 static SHREDSTREAM_DROPPED_EVENTS: AtomicU64 = AtomicU64::new(0);
 
 enum EventSink<'a> {
-    Queue(&'a Arc<ArrayQueue<DexEvent>>),
+    Queue(&'a Arc<ArrayQueue<DexEvent>>, &'a Notify),
     Callback(&'a (dyn Fn(DexEvent) + Send + Sync)),
 }
 
@@ -33,10 +33,11 @@ impl EventSink<'_> {
     #[inline]
     fn deliver(&self, event: DexEvent) {
         match self {
-            EventSink::Queue(queue) => {
+            EventSink::Queue(queue, notify) => {
                 if queue.push(event).is_err() {
                     record_shredstream_dropped_event();
                 }
+                notify.notify_one();
             }
             EventSink::Callback(callback) => callback(event),
         }
@@ -63,6 +64,8 @@ pub struct ShredStreamClient {
     config: ShredStreamConfig,
     subscription_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     subscription_lifecycle: Arc<Mutex<()>>,
+    /// Signalled on every queued event; see [`Self::event_notify`].
+    event_notify: Arc<Notify>,
 }
 
 impl ShredStreamClient {
@@ -85,7 +88,16 @@ impl ShredStreamClient {
             config,
             subscription_handle: Arc::new(Mutex::new(None)),
             subscription_lifecycle: Arc::new(Mutex::new(())),
+            event_notify: Arc::new(Notify::new()),
         })
+    }
+
+    /// Wake-up handle for the queue returned by `subscribe*`: `notify_one`
+    /// fires on every queued event, so a consumer can drain with `pop()` and
+    /// then await `notified()` instead of busy-polling. Shared across
+    /// resubscribes of this client.
+    pub fn event_notify(&self) -> Arc<Notify> {
+        Arc::clone(&self.event_notify)
     }
 
     /// 订阅 DEX 事件（自动重连）
@@ -107,6 +119,7 @@ impl ShredStreamClient {
 
         let queue = Arc::new(ArrayQueue::new(100_000));
         let queue_clone = Arc::clone(&queue);
+        let notify = Arc::clone(&self.event_notify);
 
         let endpoint = self.endpoint.clone();
         let config = self.config.clone();
@@ -126,7 +139,7 @@ impl ShredStreamClient {
                     &endpoint,
                     &config,
                     event_type_filter.as_ref(),
-                    EventSink::Queue(&queue_clone),
+                    EventSink::Queue(&queue_clone, &notify),
                 )
                 .await
                 {
