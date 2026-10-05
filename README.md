@@ -113,21 +113,40 @@ sol-parser-sdk = { path = "../sol-parser-sdk", default-features = false, feature
 
 ```toml
 # Add to your Cargo.toml
-sol-parser-sdk = "0.7.4"
+sol-parser-sdk = "0.7.7"
 ```
 
 Or with the zero-copy parser (maximum performance):
 
 ```toml
-sol-parser-sdk = { version = "0.7.4", default-features = false, features = ["parse-zero-copy"] }
+sol-parser-sdk = { version = "0.7.7", default-features = false, features = ["parse-zero-copy"] }
 ```
 
 ### Release Notes
+
+#### v0.7.7
+
+- Adds opt-in instruction-level route analysis with CPI positions, observed transfers, native SOL/WSOL lifecycle evidence, and unknown-program coverage.
+- Tracks verified StonkFun inner/graduated pool identities and migration clues without assuming every CPMM pool is StonkFun.
+- Adds raw gRPC account snapshots with slot/write-version ordering and a cache capture example for RPC-free trading hot paths.
+
+#### v0.7.6
+
+- Anchors Raydium CLMM/CPMM, Orca Whirlpool, Meteora DLMM, and Raydium AMM account fills on the event's own pool so multi-hop routes no longer cross-fill vaults or configs from a sibling swap.
+- Exposes instruction account fields on CPMM/CLMM/Whirlpool/DLMM/AMM swap events (config, vaults, mints, observation, tick arrays / bitmap extension where applicable).
+- Tightens invoke matching helpers used by account fillers and merger paths.
+
+#### v0.7.5
+
+- Backfills Meteora DAMM v2 swap/swap2 mint, vault, payer, token-program, and remaining instruction accounts from the matching pool's real swap instruction, including optional referral handling.
+- Avoids assigning accounts from a different pool or from ambiguous repeated swaps in the same pool.
+- Verifies both transactions reported in solana-streamer issue #82 with live mainnet RPC regressions for the default and zero-copy parsers.
 
 #### v0.7.4
 
 - Adds `Protocol::StonkFun` and `Protocol::LaunchLab` as the preferred subscription names; the old `Protocol::RaydiumLaunchlab` remains compatible.
 - Identifies StonkFun standard and reward pools from their official LaunchLab platform configuration accounts.
+- Opt-in RPC/Yellowstone route inspection preserves CPI positions, mint flows, limits, observed amounts and opaque programs; migration events expose pool provenance. See the [StonkFun capture audit and route API](docs/STONKFUN_AUDIT.md).
 - Parses the complete current LaunchLab trade event, including reserves, all fee legs, pool status, and the three appended trade accounts.
 - Supports the current 18-account LaunchLab trade instruction layout and preserves the appended accounts when merging log and instruction events.
 - Adds a real mainnet StonkFun reward-pool transaction regression using signature `4Pb4vgRq6rAFi5NmMZMsfBvuwVVsvBqhySfPS3naMksujvEiGtPjxRLape7V82ZVQvxt7P8YKPCL6RSWTreMUFrY`.

@@ -281,6 +281,24 @@ pub struct RaydiumLaunchlabMigrateAmmEvent {
     pub new_pool: Pubkey,
     pub user: Pubkey,
     pub liquidity_amount: u64,
+    /// Migration instruction does not contain the executed LP amount.
+    #[serde(default)]
+    pub liquidity_amount_known: bool,
+    #[serde(default)]
+    pub base_mint: Pubkey,
+    #[serde(default)]
+    pub quote_mint: Pubkey,
+    /// Present on migrate_to_cpswap; absent on the legacy AMM migration.
+    #[serde(default)]
+    pub platform_config: Pubkey,
+    #[serde(default)]
+    pub destination_program: Pubkey,
+}
+
+impl RaydiumLaunchlabMigrateAmmEvent {
+    pub fn stonkfun_mode(&self) -> Option<StonkFunMode> {
+        stonkfun_mode_from_platform_config(self.platform_config)
+    }
 }
 
 /// PumpFun Trade Event - 基于官方IDL定义
@@ -1119,7 +1137,7 @@ pub struct PumpSwapWithdrawEvent {
 
 /// Raydium CPMM Swap Event (基于IDL SwapEvent + swapBaseInput指令定义)
 #[cfg_attr(feature = "parse-borsh", derive(BorshDeserialize))]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RaydiumCpmmSwapEvent {
     #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub metadata: EventMetadata,
@@ -1140,21 +1158,32 @@ pub struct RaydiumCpmmSwapEvent {
     pub output_transfer_fee: u64,
     #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub base_input: bool,
-    // === 指令参数字段 (暂时注释，以后可能会用到，AI不要删除) ===
-    // pub amount_in: u64,
-    // pub minimum_amount_out: u64,
 
-    // === 指令账户字段 (暂时注释，以后可能会用到，AI不要删除) ===
-    // pub payer: Pubkey,              // 0: payer
-    // pub authority: Pubkey,          // 1: authority
-    // pub amm_config: Pubkey,         // 2: ammConfig
-    // pub pool_state: Pubkey,         // 3: poolState
-    // pub input_token_account: Pubkey, // 4: inputTokenAccount
-    // pub output_token_account: Pubkey, // 5: outputTokenAccount
-    // pub input_vault: Pubkey,        // 6: inputVault
-    // pub output_vault: Pubkey,       // 7: outputVault
-    // pub input_token_mint: Pubkey,   // 10: inputTokenMint
-    // pub output_token_mint: Pubkey,  // 11: outputTokenMint
+    // === Instruction accounts (swap_base_input; filled by account_filler) ===
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub amm_config: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub input_vault: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub output_vault: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub input_token_program: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub output_token_program: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub input_token_mint: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub output_token_mint: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub observation_state: Pubkey,
 }
 
 /// Raydium CPMM Deposit Event
@@ -1205,7 +1234,7 @@ pub struct RaydiumCpmmWithdrawEvent {
 
 /// Raydium CLMM Swap Event (IDL `SwapEvent`)
 #[cfg_attr(feature = "parse-borsh", derive(BorshDeserialize))]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RaydiumClmmSwapEvent {
     #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub metadata: EventMetadata,
@@ -1222,6 +1251,32 @@ pub struct RaydiumClmmSwapEvent {
     pub sqrt_price_x64: u128,
     pub liquidity: u128,
     pub tick: i32,
+
+    // === Instruction accounts (swap / swap_v2; filled by account_filler) ===
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub amm_config: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub input_vault: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub output_vault: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub observation_state: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub input_mint: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub output_mint: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub tick_array_bitmap_extension: Option<Pubkey>,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub tick_arrays: Vec<Pubkey>,
 }
 
 /// Raydium CLMM Close Position Event
@@ -2447,7 +2502,7 @@ pub struct NonceAccountEvent {
 // ====================== Orca Whirlpool Events ======================
 
 /// Orca Whirlpool Swap Event (基于 TradedEvent，不是 SwapEvent)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "parse-borsh", derive(BorshDeserialize))]
 pub struct OrcaWhirlpoolSwapEvent {
     #[cfg_attr(feature = "parse-borsh", borsh(skip))]
@@ -2472,21 +2527,38 @@ pub struct OrcaWhirlpoolSwapEvent {
     pub lp_fee: u64,
     #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub protocol_fee: u64,
-    // === 指令参数字段 (暂时注释，以后可能会用到，AI不要删除) ===
-    // pub amount: u64,
-    // pub other_amount_threshold: u64,
-    // pub sqrt_price_limit: u128,
-    // pub amount_specified_is_input: bool,
 
-    // === 指令账户字段 (暂时注释，以后可能会用到，AI不要删除) ===
-    // pub token_authority: Pubkey,    // 1: tokenAuthority
-    // pub token_owner_account_a: Pubkey, // 3: tokenOwnerAccountA
-    // pub token_vault_a: Pubkey,      // 4: tokenVaultA
-    // pub token_owner_account_b: Pubkey, // 5: tokenOwnerAccountB
-    // pub token_vault_b: Pubkey,      // 6: tokenVaultB
-    // pub tick_array_0: Pubkey,       // 7: tickArray0
-    // pub tick_array_1: Pubkey,       // 8: tickArray1
-    // pub tick_array_2: Pubkey,       // 9: tickArray2
+    // === Instruction accounts (swap / swap_v2; filled by account_filler) ===
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub token_program_a: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub token_program_b: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub token_mint_a: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub token_mint_b: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub token_vault_a: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub token_vault_b: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub tick_array_0: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub tick_array_1: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub tick_array_2: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub oracle: Pubkey,
 }
 
 /// Orca Whirlpool Liquidity Increased Event
@@ -2695,6 +2767,27 @@ pub struct MeteoraDammV2SwapEvent {
     #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub reserve_b_amount: u64,
     // ---------- 账号 -------------
+    #[serde(default)]
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    pub pool_authority: Pubkey,
+    #[serde(default)]
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    pub input_token_account: Pubkey,
+    #[serde(default)]
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    pub output_token_account: Pubkey,
+    #[serde(default)]
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    pub payer: Pubkey,
+    #[serde(default)]
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    pub referral_token_account: Option<Pubkey>,
+    #[serde(default)]
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    pub event_authority: Pubkey,
+    #[serde(default)]
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    pub program: Pubkey,
     #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub token_a_vault: Pubkey,
     #[cfg_attr(feature = "parse-borsh", borsh(skip))]
@@ -2938,7 +3031,7 @@ pub struct MeteoraDbcCurveCompleteEvent {
 
 /// Meteora DLMM Swap Event
 #[cfg_attr(feature = "parse-borsh", derive(BorshDeserialize))]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MeteoraDlmmSwapEvent {
     #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub metadata: EventMetadata,
@@ -2972,6 +3065,29 @@ pub struct MeteoraDlmmSwapEvent {
     pub protocol_fee: u64, // 8 bytes
     pub fee_bps: u128,     // 16 bytes
     pub host_fee: u64,     // 8 bytes
+
+    // === Instruction accounts (swap2; filled by account_filler) ===
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub reserve_x: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub reserve_y: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub oracle: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub bitmap_extension: Option<Pubkey>,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub token_x_program: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub token_y_program: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub bin_arrays: Vec<Pubkey>,
 }
 
 /// Meteora DLMM Add Liquidity Event
@@ -3165,6 +3281,7 @@ mod serde_compat_tests {
             protocol_fee: 6,
             fee_bps: 7,
             host_fee: 8,
+            ..Default::default()
         };
         let json = without_fields(
             &event,
