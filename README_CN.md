@@ -113,16 +113,36 @@ sol-parser-sdk = { path = "../sol-parser-sdk", default-features = false, feature
 
 ```toml
 # 在 Cargo.toml 中添加
-sol-parser-sdk = "0.7.7"
+sol-parser-sdk = "0.7.10"
 ```
 
 或使用零拷贝解析器（最高性能）：
 
 ```toml
-sol-parser-sdk = { version = "0.7.7", default-features = false, features = ["parse-zero-copy"] }
+sol-parser-sdk = { version = "0.7.10", default-features = false, features = ["parse-zero-copy"] }
 ```
 
 ### 发布说明
+
+#### v0.7.10
+
+- 按实际指令 discriminator 和事件 mint 匹配 PumpFun create/create_v2 账户，支持 CPI，并拒绝猜测有歧义的匹配。
+- 停止从 create_v2 的任意尾部账户推断 quote mint、vault、token program，保留权威解码字段。
+- 恢复历史 CreateEvent 布局，并通过保存的真实主网成功、失败交易验证。
+
+#### v0.7.9
+
+- 按独立账户布局及 boost vault authority 匹配，修复 PumpSwap `boost_buy_and_burn` 的池金库和 token program 回填。
+- 保留严格的池、交易方向、用户与唯一性匹配，以及普通交易按真实账户数量处理 ALT 的逻辑。
+- 修复 Ed25519、secp256k1 和 secp256r1 预编译指令导致的日志指令索引偏移。
+- 新增 boost 买入及含预编译指令卖出的离线主网回放样本，覆盖 RPC 与 Yellowstone 两种解析路径。
+
+#### v0.7.8
+
+- Updates CPMM creator-fee collection accounts, share PDA and AmmConfig share-rate decoding.
+- Fixes failed-transaction event suppression and instruction/account preservation.
+- Adds RPC capture/replay examples and 13 mainnet transactions with 17 independently checked operations.
+- Run `cargo run --example rpc_corpus_validate -- --list` to view real signatures; run without arguments for offline validation.
 
 #### v0.7.7
 
