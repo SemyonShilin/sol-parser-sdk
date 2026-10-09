@@ -36,16 +36,30 @@
 
 ---
 
-## 📦 SDK Versions
+## 📦 SDK Versions and Related SDKs
 
-This SDK is available in multiple languages:
+Parser SDK language versions and related Rust SDKs:
 
-| Language | Repository | Description |
-|----------|------------|-------------|
-| **Rust** | [sol-parser-sdk](https://github.com/0xfnzero/sol-parser-sdk) | Ultra-low latency with SIMD optimization |
-| **Node.js** | [sol-parser-sdk-nodejs](https://github.com/0xfnzero/sol-parser-sdk-nodejs) | TypeScript/JavaScript for Node.js |
-| **Python** | [sol-parser-sdk-python](https://github.com/0xfnzero/sol-parser-sdk-python) | Async/await native support |
-| **Go** | [sol-parser-sdk-golang](https://github.com/0xfnzero/sol-parser-sdk-golang) | Concurrent-safe with goroutine support |
+| Language | Repository | Description | Version |
+|----------|------------|-------------|---------|
+| **Rust** | [sol-parser-sdk](https://github.com/0xfnzero/sol-parser-sdk) | Ultra-low latency with SIMD optimization | `v0.7.12` |
+| **Node.js** | [sol-parser-sdk-nodejs](https://github.com/0xfnzero/sol-parser-sdk-nodejs) | TypeScript/JavaScript for Node.js | `v0.5.18` |
+| **Python** | [sol-parser-sdk-python](https://github.com/0xfnzero/sol-parser-sdk-python) | Async/await native support | `v0.5.11` |
+| **Go** | [sol-parser-sdk-golang](https://github.com/0xfnzero/sol-parser-sdk-golang) | Concurrent-safe with goroutine support | `v0.5.11` |
+| **Rust** | [sol-shred-sdk](https://github.com/0xfnzero/sol-shred-sdk) | Raw Solana shred decoding and ShredStream DEX event parsing | `v4.0.3` |
+| **Rust** | [sol-trade-sdk](https://github.com/0xfnzero/sol-trade-sdk) | Solana DEX trade construction and transaction execution | `v6.0.0` |
+
+## v0.7.12 — PumpFun migration event CPI fix
+
+Fixes PumpFun migration event decoding from event CPI instructions, including captured `migrate_v2` and already-migrated transaction regressions. Retains the signed transaction, loaded-address, ordered stream and parser lifecycle hardening from 0.7.11.
+
+Published together with `solana-streamer-sdk 3.0.10`, which pins this parser release. Validation uses offline transaction fixtures and local tests; no funded mainnet transactions are broadcast.
+
+## v0.7.11 — Signed transaction and hot-path hardening
+
+Hardens signed transaction sanitization, loaded-address boundaries, ordered stream filtering and parser lifecycle. Aligns CLMM and DEX instruction/event layouts, nested CPI route attribution and liquidity/reward accounting. Adds independently signed wire fixtures, ALT failure cases and offline bank regressions.
+
+Validation includes local CPU benchmarks and offline signed-bank scenarios. Measured hot paths use cached inputs without RPC. Benchmarks do not establish production network or transaction-landing latency. No funded mainnet transactions were broadcast.
 
 ## What This SDK Is For
 
@@ -56,7 +70,7 @@ This SDK is available in multiple languages:
 | Parser inputs | Yellowstone gRPC, ShredStream, RPC transactions, encoded transactions, protocol account data |
 | DEX protocols | PumpFun, PumpSwap, Pump Fees, LaunchLab (including StonkFun), Raydium CPMM, Raydium CLMM, Raydium AMM V4, Meteora DAMM v2, Meteora DLMM, Meteora DBC, Orca Whirlpool |
 | Parser backends | Default Borsh parser for maintainability, optional zero-copy parser for latency-sensitive hot paths |
-| Related SDK | Use [solana-streamer](https://github.com/0xfnzero/solana-streamer) when you want a higher-level streaming facade over this parser core |
+| Related SDK | Use [solana-streamer](https://github.com/0xfnzero/solana-streamer) (`3.0.10`) when you want a higher-level streaming facade over this parser core |
 
 ---
 
@@ -74,7 +88,9 @@ This SDK is available in multiple languages:
 | **Unordered** | 10-20μs | Immediate output, ultra-low latency |
 | **MicroBatch** | 50-200μs | Micro-batch ordering with time window |
 | **StreamingOrdered** | 0.1-5ms | Stream ordering with continuous sequence release |
-| **Ordered** | 1-50ms | Full slot ordering, wait for complete slot |
+| **Ordered** | 1-50ms | Buffered slot ordering, flush on newer slot or timeout |
+
+Ordered output retains its last emitted `(slot, tx_index)` watermark. A newer-slot flush closes older slots; timeout flushing still accepts later transactions in the same slot with a higher index. Late data from closed slots or at/before the watermark is dropped with an `Ordered continuity break` warning. Events within one transaction preserve parser order. This mode cannot guarantee upstream completeness.
 
 ### 🚀 Optimization Highlights
 - ✅ **Zero heap allocation** for hot paths
@@ -113,13 +129,13 @@ sol-parser-sdk = { path = "../sol-parser-sdk", default-features = false, feature
 
 ```toml
 # Add to your Cargo.toml
-sol-parser-sdk = "0.7.10"
+sol-parser-sdk = "0.7.12"
 ```
 
 Or with the zero-copy parser (maximum performance):
 
 ```toml
-sol-parser-sdk = { version = "0.7.10", default-features = false, features = ["parse-zero-copy"] }
+sol-parser-sdk = { version = "0.7.12", default-features = false, features = ["parse-zero-copy"] }
 ```
 
 ### Release Notes
@@ -166,7 +182,7 @@ sol-parser-sdk = { version = "0.7.10", default-features = false, features = ["pa
 
 - Adds `Protocol::StonkFun` and `Protocol::LaunchLab` as the preferred subscription names; the old `Protocol::RaydiumLaunchlab` remains compatible.
 - Identifies StonkFun standard and reward pools from their official LaunchLab platform configuration accounts.
-- Opt-in RPC/Yellowstone route inspection preserves CPI positions, mint flows, limits, observed amounts and opaque programs; migration events expose pool provenance. See the [StonkFun capture audit and route API](docs/STONKFUN_AUDIT.md).
+- Opt-in RPC/Yellowstone route inspection preserves CPI positions, mint flows, limits, observed amounts and opaque programs; migration events expose pool provenance. See the [StonkFun route analysis and account subscriptions](docs/ROUTE_ANALYSIS.md).
 - Parses the complete current LaunchLab trade event, including reserves, all fee legs, pool status, and the three appended trade accounts.
 - Supports the current 18-account LaunchLab trade instruction layout and preserves the appended accounts when merging log and instruction events.
 - Adds a real mainnet StonkFun reward-pool transaction regression using signature `4Pb4vgRq6rAFi5NmMZMsfBvuwVVsvBqhySfPS3naMksujvEiGtPjxRLape7V82ZVQvxt7P8YKPCL6RSWTreMUFrY`.
@@ -551,20 +567,18 @@ Each protocol supports:
 
 | Protocol | Events | Accounts | Examples | Language constants |
 |----------|--------|----------|----------|--------------------|
-| LaunchLab | Trade, pool create, migrate | Pending | Migration, buy/sell oracle planned | Rust, Node, Python, Go |
+| LaunchLab | Trade, pool create, migrate | Pool/config snapshots | Migration, buy/sell oracle planned | Rust, Node, Python, Go |
 | Raydium CPMM | Swap, deposit, withdraw, initialize | AmmConfig, PoolState | New pool, token price | Rust, Node, Python, Go |
 | Raydium CLMM | Swap, pool, position, liquidity | AmmConfig, PoolState, TickArray | Token price | Rust, Node, Python, Go |
 | Raydium AMM V4 | Swap, deposit, withdraw, initialize2 | Pending | Token price oracle planned | Rust, Node, Python, Go |
 | Orca Whirlpool | Swap, liquidity, pool init | Whirlpool, Position, TickArray, FeeTier, Config | Token price | Rust, Node, Python, Go |
 | Meteora Pools | Swap, liquidity, pool create, fees | Pending | Token price oracle planned | Rust, Node, Python, Go |
 | Meteora DAMM V2 | Swap, liquidity, position | Pending | New pool, token price oracle planned | Rust, Node, Python, Go |
-| Meteora DLMM | Swap, liquidity, bin/position | Pending | Token price oracle planned | Rust, Node, Python, Go |
+| Meteora DLMM | Swap, liquidity, bin/position | Pool/bin array/bitmap snapshots | Token price oracle planned | Rust, Node, Python, Go |
 | Meteora DBC | Swap, initialize pool, curve complete (Rust log parser) | Pending | Token price, migration oracle planned | Rust, Node, Python, Go |
 
 The canonical cross-language baseline is tracked in
-[`protocols/canonical.json`](protocols/canonical.json). The current audit and
-remaining parser work are documented in
-[`docs/non-pump-dex-gap-analysis.md`](docs/non-pump-dex-gap-analysis.md).
+[`protocols/canonical.json`](protocols/canonical.json). Raw account updates are opt-in via `AccountRawSnapshot`; specialized snapshots cover LaunchLab pools/configs, DLMM pools/bin arrays/bitmap extensions, Whirlpool dynamic arrays/adaptive Oracles and CLMM bitmap extensions.
 
 ---
 
@@ -738,7 +752,7 @@ let config = ClientConfig {
     ..ClientConfig::default()
 };
 
-// Full slot ordering (1-50ms, wait for complete slot)
+// Buffered slot ordering (flush on newer slot or timeout)
 let config = ClientConfig {
     order_mode: OrderMode::Ordered,
     order_timeout_ms: 100,
@@ -876,3 +890,14 @@ cargo build --release
 # Generate docs
 cargo doc --open
 ```
+
+Shared PumpFun create/create_v2 mainnet fixtures, replay instructions and verification limits are documented in the [validation guide](https://github.com/0xfnzero/sol-parser-sdk-golang/tree/main/validation/pumpfun_create_20261007).
+
+## Usage documentation
+
+- [Account subscriptions](docs/ACCOUNT_SUBSCRIPTIONS.md)
+- [Route analysis](docs/ROUTE_ANALYSIS.md)
+- [CPMM creator-fee](docs/cpmm-creator-fee-share.md)
+- [Pump/PumpSwap account layouts](docs/PUMP_PUMP_AMM_PARSER_ACCOUNTS.md)
+- [gRPC versus RPC](docs/grpc-vs-rpc.md)
+- [Latency troubleshooting](docs/troubleshooting-latency.md)

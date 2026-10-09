@@ -5,11 +5,11 @@
 ## IDL 同步
 
 - **来源**: sol-trade-sdk `idl/`
-- **目标**: sol-parser-sdk `idls/`
+- **目标**: sol-parser-sdk `idl/`
 - **已同步文件**:
-  - `idl/pump.json` → `idls/pumpfun.json`（Pump 程序，同 program id）
-  - `idl/pump_amm.json` → `idls/pump_amm.json`
-  - `idl/pump_fees.json` → `idls/pump_fees.json`（可选，供后续 fee sharing 等解析使用）
+  - `idl/pump.json` → `idl/pumpfun.json`（Pump 程序，同 program id）
+  - `idl/pump_amm.json` → `idl/pump_amm.json`
+  - `idl/pump_fees.json` → `idl/pump_fees.json`（可选，供后续 fee sharing 等解析使用）
 
 ## Pump（Bonding Curve）Buy / Sell
 
@@ -175,4 +175,13 @@
 
 1. 使用 Pump 事件构建卖出参数时，务必在合并/下发前调用 **fill_trade_accounts**，以便 `creator_vault` 来自当前指令账户，避免 2006 seeds 错误。
 2. 不要只依赖 IDL 固定账户数判断升级后交易是否完整；Pump/PumpSwap 的新增账户都在 remaining accounts。
-3. 保持 IDL 与 sol-trade-sdk 定期同步（复制 `idl/*.json` → `idls/`），以便新指令或新账户加入时解析与注释仍正确。
+3. 保持 IDL 与 sol-trade-sdk 定期同步（复制 `idl/*.json` → `idl/`），以便新指令或新账户加入时解析与注释仍正确。
+
+
+## Pump upgrade (October 2026)
+
+Compact Pump v3 and PumpSwap v2 trades use their new 17-account layouts. New typed events cover `PumpFunPostCompleteBuy`, `PumpFunComplete`, `PumpFunSweepBondingCurveFee` and `PumpSwapSweepPoolFee`, with program-scoped log and CPI parsing. Historical SOL CompleteEvent payloads remain supported. Curve/pool retained fees and synthetic counters are exposed; optional historical tails default to zero.
+
+For a synthetic completing buy, retain TradeEvent **and** PostCompleteBuyEvent and aggregate execution amounts within the same invocation. CompleteEvent is the completion notification. For `multi_hop_swap`, retain each venue's trade events; different venues are not merged into one fill. The multi-hop intent decoder exposes the fixed user accounts, input/minimum limits and 5 roles per hop; these limits are not actual executed amounts. Streamer forwards the typed events and account fields through its parser bridge (its re-exported `parser_sdk` also provides the intent decoder).
+
+Reference: [pump-public-docs](https://github.com/pump-fun/pump-public-docs/tree/8cda1fa30ea658b20909d8aedf002047119388d2). Validation uses offline official IDL fixtures; no live trade is sent by the tests.

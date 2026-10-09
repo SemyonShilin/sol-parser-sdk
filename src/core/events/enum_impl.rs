@@ -21,7 +21,7 @@ pub enum DexEvent {
     PumpFunSell(PumpFunTradeEvent),             // - 已对接 (仅卖出事件，用于过滤)
     PumpFunBuyExactSolIn(PumpFunTradeEvent),    // - 已对接 (精确SOL买入事件，用于过滤)
     PumpFunMigrate(PumpFunMigrateEvent),        // - 已对接
-    /// Pump fees：`CreateFeeSharingConfigEvent`（`pfeeUx...`，见 `idls/pump_fees.json`）
+    /// Pump fees：`CreateFeeSharingConfigEvent`（`pfeeUx...`，见 `idl/pump_fees.json`）
     PumpFeesCreateFeeSharingConfig(PumpFeesCreateFeeSharingConfigEvent),
     PumpFeesInitializeFeeConfig(PumpFeesInitializeFeeConfigEvent),
     PumpFeesResetFeeSharingConfig(PumpFeesResetFeeSharingConfigEvent),
@@ -48,13 +48,21 @@ pub enum DexEvent {
 
     // Meteora DAMM V2 事件
     MeteoraDammV2Swap(MeteoraDammV2SwapEvent), // - 已对接
+    MeteoraDammV2ClaimPositionFee(MeteoraDammV2ClaimPositionFeeEvent),
+    MeteoraDammV2ClaimReward(MeteoraDammV2ClaimRewardEvent),
+    MeteoraDlmmClaimReward(MeteoraDlmmClaimRewardEvent),
     MeteoraDammV2CreatePosition(MeteoraDammV2CreatePositionEvent), // - 已对接
-    MeteoraDammV2ClosePosition(MeteoraDammV2ClosePositionEvent), // - 已对接
-    MeteoraDammV2AddLiquidity(MeteoraDammV2AddLiquidityEvent), // - 已对接
+    MeteoraDammV2ClosePosition(MeteoraDammV2ClosePositionEvent),   // - 已对接
+    MeteoraDammV2AddLiquidity(MeteoraDammV2AddLiquidityEvent),     // - 已对接
     MeteoraDammV2RemoveLiquidity(MeteoraDammV2RemoveLiquidityEvent), // - 已对接
     MeteoraDammV2InitializePool(MeteoraDammV2InitializePoolEvent), // - 已对接
     MeteoraDammV2UpdateDelegatePermission(MeteoraDammV2UpdateDelegatePermissionEvent),
     MeteoraDammV2WithdrawDeadLiquidityReward(MeteoraDammV2WithdrawDeadLiquidityRewardEvent),
+    MeteoraDammV2WithdrawIneligibleReward(MeteoraDammV2WithdrawIneligibleRewardEvent),
+    MeteoraDammV2UpdateRewardFunder(MeteoraDammV2UpdateRewardFunderEvent),
+    MeteoraDammV2UpdateRewardDuration(MeteoraDammV2UpdateRewardDurationEvent),
+    MeteoraDammV2InitializeReward(MeteoraDammV2InitializeRewardEvent),
+    MeteoraDammV2FundReward(MeteoraDammV2FundRewardEvent),
     MeteoraDammV2CreateConfig(MeteoraDammV2CreateConfigEvent),
     MeteoraDammV2CreateDynamicConfig(MeteoraDammV2CreateDynamicConfigEvent),
 
@@ -148,6 +156,10 @@ pub enum DexEvent {
 
     // 错误事件
     Error(String),
+    PumpFunPostCompleteBuy(PumpFunPostCompleteBuyEvent),
+    PumpFunSweepBondingCurveFee(PumpFunSweepBondingCurveFeeEvent),
+    PumpFunComplete(PumpFunCompleteEvent),
+    PumpSwapSweepPoolFee(PumpSwapSweepPoolFeeEvent),
 }
 
 // 静态默认 EventMetadata，用于 Error 事件
@@ -181,6 +193,10 @@ impl DexEvent {
             DexEvent::PumpFeesUpdateFeeConfig(e) => &e.metadata,
             DexEvent::PumpFeesUpdateFeeShares(e) => &e.metadata,
             DexEvent::PumpFeesUpsertFeeTiers(e) => &e.metadata,
+            DexEvent::PumpFunPostCompleteBuy(e) => &e.metadata,
+            DexEvent::PumpFunSweepBondingCurveFee(e) => &e.metadata,
+            DexEvent::PumpFunComplete(e) => &e.metadata,
+            DexEvent::PumpSwapSweepPoolFee(e) => &e.metadata,
             DexEvent::PumpFunMigrateBondingCurveCreator(e) => &e.metadata,
             DexEvent::PumpFunGlobalAccount(e) => &e.metadata,
             DexEvent::PumpFunBondingCurveAccount(e) => &e.metadata,
@@ -199,6 +215,9 @@ impl DexEvent {
 
             // Meteora DAMM V2 事件
             DexEvent::MeteoraDammV2Swap(e) => &e.metadata,
+            DexEvent::MeteoraDammV2ClaimPositionFee(e) => &e.metadata,
+            DexEvent::MeteoraDammV2ClaimReward(e) => &e.metadata,
+            DexEvent::MeteoraDlmmClaimReward(e) => &e.metadata,
             DexEvent::MeteoraDammV2CreatePosition(e) => &e.metadata,
             DexEvent::MeteoraDammV2ClosePosition(e) => &e.metadata,
             DexEvent::MeteoraDammV2AddLiquidity(e) => &e.metadata,
@@ -206,6 +225,11 @@ impl DexEvent {
             DexEvent::MeteoraDammV2InitializePool(e) => &e.metadata,
             DexEvent::MeteoraDammV2UpdateDelegatePermission(e) => &e.metadata,
             DexEvent::MeteoraDammV2WithdrawDeadLiquidityReward(e) => &e.metadata,
+            DexEvent::MeteoraDammV2WithdrawIneligibleReward(e) => &e.metadata,
+            DexEvent::MeteoraDammV2UpdateRewardFunder(e) => &e.metadata,
+            DexEvent::MeteoraDammV2UpdateRewardDuration(e) => &e.metadata,
+            DexEvent::MeteoraDammV2InitializeReward(e) => &e.metadata,
+            DexEvent::MeteoraDammV2FundReward(e) => &e.metadata,
             DexEvent::MeteoraDammV2CreateConfig(e) => &e.metadata,
             DexEvent::MeteoraDammV2CreateDynamicConfig(e) => &e.metadata,
             DexEvent::MeteoraDbcSwap(e) => &e.metadata,
@@ -321,6 +345,10 @@ impl DexEvent {
             DexEvent::PumpFeesUpdateFeeConfig(e) => Some(&mut e.metadata),
             DexEvent::PumpFeesUpdateFeeShares(e) => Some(&mut e.metadata),
             DexEvent::PumpFeesUpsertFeeTiers(e) => Some(&mut e.metadata),
+            DexEvent::PumpFunPostCompleteBuy(e) => Some(&mut e.metadata),
+            DexEvent::PumpFunSweepBondingCurveFee(e) => Some(&mut e.metadata),
+            DexEvent::PumpFunComplete(e) => Some(&mut e.metadata),
+            DexEvent::PumpSwapSweepPoolFee(e) => Some(&mut e.metadata),
             DexEvent::PumpFunMigrateBondingCurveCreator(e) => Some(&mut e.metadata),
             DexEvent::PumpFunGlobalAccount(e) => Some(&mut e.metadata),
             DexEvent::PumpFunBondingCurveAccount(e) => Some(&mut e.metadata),
@@ -335,6 +363,9 @@ impl DexEvent {
             DexEvent::PumpSwapLiquidityAdded(e) => Some(&mut e.metadata),
             DexEvent::PumpSwapLiquidityRemoved(e) => Some(&mut e.metadata),
             DexEvent::MeteoraDammV2Swap(e) => Some(&mut e.metadata),
+            DexEvent::MeteoraDammV2ClaimPositionFee(e) => Some(&mut e.metadata),
+            DexEvent::MeteoraDammV2ClaimReward(e) => Some(&mut e.metadata),
+            DexEvent::MeteoraDlmmClaimReward(e) => Some(&mut e.metadata),
             DexEvent::MeteoraDammV2CreatePosition(e) => Some(&mut e.metadata),
             DexEvent::MeteoraDammV2ClosePosition(e) => Some(&mut e.metadata),
             DexEvent::MeteoraDammV2AddLiquidity(e) => Some(&mut e.metadata),
@@ -342,6 +373,11 @@ impl DexEvent {
             DexEvent::MeteoraDammV2InitializePool(e) => Some(&mut e.metadata),
             DexEvent::MeteoraDammV2UpdateDelegatePermission(e) => Some(&mut e.metadata),
             DexEvent::MeteoraDammV2WithdrawDeadLiquidityReward(e) => Some(&mut e.metadata),
+            DexEvent::MeteoraDammV2WithdrawIneligibleReward(e) => Some(&mut e.metadata),
+            DexEvent::MeteoraDammV2UpdateRewardFunder(e) => Some(&mut e.metadata),
+            DexEvent::MeteoraDammV2UpdateRewardDuration(e) => Some(&mut e.metadata),
+            DexEvent::MeteoraDammV2InitializeReward(e) => Some(&mut e.metadata),
+            DexEvent::MeteoraDammV2FundReward(e) => Some(&mut e.metadata),
             DexEvent::MeteoraDammV2CreateConfig(e) => Some(&mut e.metadata),
             DexEvent::MeteoraDammV2CreateDynamicConfig(e) => Some(&mut e.metadata),
             DexEvent::MeteoraDbcSwap(e) => Some(&mut e.metadata),

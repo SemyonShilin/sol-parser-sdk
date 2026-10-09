@@ -309,6 +309,9 @@ impl RaydiumLaunchlabMigrateAmmEvent {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, BorshDeserialize)]
 pub struct PumpFunTradeEvent {
     #[borsh(skip)]
+    #[serde(default)]
+    pub creator_fee_unclaimed: u64,
+    #[borsh(skip)]
     pub metadata: EventMetadata,
 
     // === IDL TradeEvent 事件字段（Borsh 序列化字段，按顺序）===
@@ -471,7 +474,7 @@ pub struct PumpFunMigrateEvent {
     // pub pool_quote_token_account: Pubkey,
 }
 
-// ---------- pump-fees IDL：`idls/pump_fees.json`（Program `pfeeUx...`）----------
+// ---------- pump-fees IDL：`idl/pump_fees.json`（Program `pfeeUx...`）----------
 
 /// IDL `Shareholder`
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, BorshDeserialize)]
@@ -488,7 +491,7 @@ pub enum PumpFeesConfigStatus {
 }
 
 /// IDL `Fees`
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct PumpFeesFees {
     pub lp_fee_bps: u64,
     pub protocol_fee_bps: u64,
@@ -627,6 +630,9 @@ pub struct PumpFunMigrateBondingCurveCreatorEvent {
 /// PumpFun Create Token Event - Based on IDL CreateEvent definition
 #[derive(Debug, Clone, Serialize, Deserialize, Default, BorshDeserialize)]
 pub struct PumpFunCreateTokenEvent {
+    #[borsh(skip)]
+    #[serde(default)]
+    pub depth: u8,
     #[borsh(skip)]
     pub metadata: EventMetadata,
     // IDL CreateEvent 字段（Borsh 序列化字段，按顺序）
@@ -795,6 +801,9 @@ pub struct PumpSwapTradeEvent {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, BorshDeserialize)]
 pub struct PumpSwapBuyEvent {
     #[borsh(skip)]
+    #[serde(default)]
+    pub creator_fee_unclaimed: u64,
+    #[borsh(skip)]
     pub metadata: EventMetadata,
     pub timestamp: i64,
     pub base_amount_out: u64,
@@ -890,6 +899,9 @@ pub struct PumpSwapBuyEvent {
 /// PumpSwap Sell Event
 #[derive(Debug, Clone, Serialize, Deserialize, Default, BorshDeserialize)]
 pub struct PumpSwapSellEvent {
+    #[borsh(skip)]
+    #[serde(default)]
+    pub creator_fee_unclaimed: u64,
     #[borsh(skip)]
     pub metadata: EventMetadata,
     pub timestamp: i64,
@@ -1213,6 +1225,21 @@ pub struct RaydiumCpmmSwapEvent {
     #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     #[serde(default)]
     pub output_token_account: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub input_mint: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub output_mint: Pubkey,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub trade_fee: u64,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub creator_fee: u64,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub creator_fee_on_input: bool,
 }
 
 /// Raydium CPMM Deposit Event
@@ -1366,6 +1393,10 @@ pub struct RaydiumClmmDecreaseLiquidityEvent {
     pub amount1_min: u64,
     #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub user: Pubkey,
+    /// Personal position PDA, not the NFT token account or mint.
+    #[serde(default)]
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    pub personal_position: Pubkey,
 }
 
 /// Raydium CLMM Collect Fee Event
@@ -1430,6 +1461,10 @@ pub struct RaydiumClmmIncreaseLiquidityEvent {
     pub amount1_max: u64,
     #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub user: Pubkey,
+    /// Personal position PDA, not the NFT token account or mint.
+    #[serde(default)]
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    pub personal_position: Pubkey,
 }
 
 /// Raydium CLMM Liquidity Change Event (IDL `LiquidityChangeEvent`)
@@ -2033,6 +2068,10 @@ pub struct PumpSwapPoolAccountEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PumpSwapPool {
+    #[serde(default)]
+    pub protocol_fees: u64,
+    #[serde(default)]
+    pub creator_fees: u64,
     pub pool_bump: u8,
     pub index: u16,
     pub creator: Pubkey,
@@ -2066,6 +2105,18 @@ pub struct PumpFunBondingCurveAccountEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PumpFunBondingCurve {
+    #[serde(default)]
+    pub creator_fee: u64,
+    #[serde(default)]
+    pub protocol_fees: u64,
+    #[serde(default)]
+    pub depth: u8,
+    #[serde(default)]
+    pub initial_virtual_quote_reserves: u64,
+    #[serde(default)]
+    pub post_complete_base_out: u64,
+    #[serde(default)]
+    pub post_complete_quote_in: u64,
     pub virtual_token_reserves: u64,
     pub virtual_quote_reserves: u64,
     pub real_token_reserves: u64,
@@ -2093,6 +2144,8 @@ pub struct PumpFunFeeConfigAccountEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PumpFunFeeConfig {
+    #[serde(default)]
+    pub exotic_flat_fees: PumpFeesFees,
     pub bump: u8,
     pub admin: Pubkey,
     pub flat_fees: PumpFeesFees,
@@ -2167,6 +2220,17 @@ pub struct PumpFunGlobalAccountEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PumpFunGlobal {
+    #[serde(default)]
+    pub creator_fee_configurable: bool,
+    #[serde(default)]
+    pub max_configurable_creator_fee_bps: u64,
+    #[serde(default)]
+    pub holder_reward_claim_authority: Pubkey,
+    #[serde(default)]
+    pub is_holder_reward_enabled: bool,
+    #[serde(default)]
+    pub max_curve_depth: u8,
+
     pub initialized: bool,
     pub authority: Pubkey,
     pub fee_recipient: Pubkey,
@@ -2672,23 +2736,15 @@ pub struct OrcaWhirlpoolSwapEvent {
 pub struct OrcaWhirlpoolLiquidityIncreasedEvent {
     #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub metadata: EventMetadata,
-
-    // === Borsh 序列化字段（从 inner instruction data 读取）===
-    pub whirlpool: Pubkey,   // 32 bytes
-    pub liquidity: u128,     // 16 bytes
-    pub token_a_amount: u64, // 8 bytes
-    pub token_b_amount: u64, // 8 bytes
-
-    // === 非 Borsh 字段（从日志或其他来源填充）===
-    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    // Current official LiquidityIncreased Borsh payload, in wire order.
+    pub whirlpool: Pubkey,
     pub position: Pubkey,
-    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub tick_lower_index: i32,
-    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub tick_upper_index: i32,
-    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    pub liquidity: u128,
+    pub token_a_amount: u64,
+    pub token_b_amount: u64,
     pub token_a_transfer_fee: u64,
-    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub token_b_transfer_fee: u64,
 }
 
@@ -2698,23 +2754,15 @@ pub struct OrcaWhirlpoolLiquidityIncreasedEvent {
 pub struct OrcaWhirlpoolLiquidityDecreasedEvent {
     #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub metadata: EventMetadata,
-
-    // === Borsh 序列化字段（从 inner instruction data 读取）===
-    pub whirlpool: Pubkey,   // 32 bytes
-    pub liquidity: u128,     // 16 bytes
-    pub token_a_amount: u64, // 8 bytes
-    pub token_b_amount: u64, // 8 bytes
-
-    // === 非 Borsh 字段（从日志或其他来源填充）===
-    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    // Current official LiquidityDecreased Borsh payload, in wire order.
+    pub whirlpool: Pubkey,
     pub position: Pubkey,
-    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub tick_lower_index: i32,
-    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub tick_upper_index: i32,
-    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    pub liquidity: u128,
+    pub token_a_amount: u64,
+    pub token_b_amount: u64,
     pub token_a_transfer_fee: u64,
-    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     pub token_b_transfer_fee: u64,
 }
 
@@ -3339,6 +3387,59 @@ pub struct MeteoraDammV2WithdrawDeadLiquidityRewardEvent {
     pub reward_mint: Pubkey,
     pub amount: u64,
 }
+/// Meteora DAMM V2 Withdraw Ineligible Reward Event (IDL `EvtWithdrawIneligibleReward`)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MeteoraDammV2WithdrawIneligibleRewardEvent {
+    pub metadata: EventMetadata,
+    pub pool: Pubkey,
+    pub reward_mint: Pubkey,
+    pub amount: u64,
+}
+/// Meteora DAMM V2 UpdateRewardFunder Event (IDL `EvtUpdateRewardFunder`)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MeteoraDammV2UpdateRewardFunderEvent {
+    pub metadata: EventMetadata,
+    pub pool: Pubkey,
+    pub reward_index: u8,
+    pub old_funder: Pubkey,
+    pub new_funder: Pubkey,
+}
+/// Meteora DAMM V2 UpdateRewardDuration Event (IDL `EvtUpdateRewardDuration`)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MeteoraDammV2UpdateRewardDurationEvent {
+    pub metadata: EventMetadata,
+    pub pool: Pubkey,
+    pub reward_index: u8,
+    pub old_reward_duration: u64,
+    pub new_reward_duration: u64,
+}
+/// Meteora DAMM V2 InitializeReward Event (IDL `EvtInitializeReward`)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MeteoraDammV2InitializeRewardEvent {
+    pub metadata: EventMetadata,
+    pub pool: Pubkey,
+    pub reward_mint: Pubkey,
+    pub funder: Pubkey,
+    pub creator: Pubkey,
+    pub reward_index: u8,
+    pub reward_duration: u64,
+}
+/// Meteora DAMM V2 Fund Reward Event (IDL `EvtFundReward`).
+/// Amount includes net new funding and carried empty rewards; the post rate also
+/// includes unexpired rewards from the previous period.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MeteoraDammV2FundRewardEvent {
+    pub metadata: EventMetadata,
+    pub pool: Pubkey,
+    pub funder: Pubkey,
+    pub mint_reward: Pubkey,
+    pub reward_index: u8,
+    pub amount: u64,
+    pub transfer_fee_excluded_amount_in: u64,
+    pub reward_duration_end: u64,
+    pub pre_reward_rate: u128,
+    pub post_reward_rate: u128,
+}
 
 /// Meteora DAMM V2 Create Config Event (IDL `EvtCreateConfig`, includes 0.2.4 `permission`)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -3374,6 +3475,28 @@ pub struct MeteoraDammV2CreateDynamicConfigEvent {
 /// Meteora DBC Swap Event (IDL `EvtSwap`)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MeteoraDbcSwapEvent {
+    #[serde(default)]
+    pub event_version: u8,
+    #[serde(default)]
+    pub swap_mode: u8,
+    #[serde(default)]
+    pub amount_0: u64,
+    #[serde(default)]
+    pub amount_1: u64,
+    #[serde(default)]
+    pub maximum_amount_in: u64,
+    #[serde(default)]
+    pub included_fee_input_amount: u64,
+    /// Curve remainder uses fee-excluded units with input fees, not gross unspent wallet funding.
+    #[serde(default)]
+    pub amount_left: u64,
+    #[serde(default)]
+    pub quote_reserve_amount: u64,
+    #[serde(default)]
+    pub migration_threshold: u64,
+    #[serde(default)]
+    pub has_transfer_hook: bool,
+
     pub metadata: EventMetadata,
     pub pool: Pubkey,
     pub config: Pubkey,
@@ -3471,6 +3594,24 @@ pub struct MeteoraDlmmSwapEvent {
     #[cfg_attr(feature = "parse-borsh", borsh(skip))]
     #[serde(default)]
     pub bin_arrays: Vec<Pubkey>,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub event_version: u8,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub amount_left: u64,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub mm_fee: u64,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub limit_order_fee: u64,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub fees_on_input: bool,
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    #[serde(default)]
+    pub fees_on_token_x: bool,
 }
 
 /// Meteora DLMM Add Liquidity Event
@@ -4094,4 +4235,100 @@ mod amm_swap_wire_compat_tests {
         assert!(e.ix_name.is_empty());
         assert_eq!((e.instruction_amount_in, e.instruction_amount_out), (0, 0));
     }
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct PumpFunPostCompleteBuyEvent {
+    pub metadata: EventMetadata,
+    pub user: Pubkey,
+    pub mint: Pubkey,
+    pub bonding_curve: Pubkey,
+    pub quote_mint: Pubkey,
+    pub timestamp: i64,
+    pub base_out: u64,
+    pub quote_in: u64,
+    pub fee_basis_points: u64,
+    pub fee: u64,
+    pub creator_fee_basis_points: u64,
+    pub creator_fee: u64,
+    pub buyback_fee: u64,
+    pub pool_base_reserves_before: u64,
+    pub pool_quote_reserves_before: u64,
+    pub pool_base_reserves_after: u64,
+    pub pool_quote_reserves_after: u64,
+}
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct PumpFunSweepBondingCurveFeeEvent {
+    pub metadata: EventMetadata,
+    pub timestamp: i64,
+    pub mint: Pubkey,
+    pub bonding_curve: Pubkey,
+    pub quote_mint: Pubkey,
+    pub recipient: Pubkey,
+    pub amount: u64,
+    pub bucket: u8,
+}
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct PumpFunCompleteEvent {
+    pub metadata: EventMetadata,
+    pub user: Pubkey,
+    pub mint: Pubkey,
+    pub bonding_curve: Pubkey,
+    pub timestamp: i64,
+    pub quote_mint: Pubkey,
+}
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct PumpSwapSweepPoolFeeEvent {
+    pub metadata: EventMetadata,
+    pub timestamp: i64,
+    pub pool: Pubkey,
+    pub base_mint: Pubkey,
+    pub quote_mint: Pubkey,
+    pub recipient: Pubkey,
+    pub payer: Pubkey,
+    pub amount: u64,
+    pub bucket: u8,
+}
+
+/// Official EvtClaimPositionFee gross quantities before token transfer fees.
+#[cfg_attr(feature = "parse-borsh", derive(BorshDeserialize))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MeteoraDammV2ClaimPositionFeeEvent {
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    pub metadata: EventMetadata,
+    pub pool: Pubkey,
+    pub position: Pubkey,
+    pub owner: Pubkey,
+    pub fee_a_claimed: u64,
+    pub fee_b_claimed: u64,
+}
+
+/// Official EvtClaimReward accrued gross amount cleared from the position.
+/// A frozen-vault skip can emit a nonzero total_reward without transferring tokens.
+/// Determine wallet credits from actual token transfers and net balance changes.
+#[cfg_attr(feature = "parse-borsh", derive(BorshDeserialize))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MeteoraDammV2ClaimRewardEvent {
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    pub metadata: EventMetadata,
+    pub pool: Pubkey,
+    pub position: Pubkey,
+    pub owner: Pubkey,
+    pub mint_reward: Pubkey,
+    pub reward_index: u8,
+    pub total_reward: u64,
+}
+
+/// Modern DLMM ClaimReward2; accompanying legacy duplicate notification is not emitted.
+#[cfg_attr(feature = "parse-borsh", derive(BorshDeserialize))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MeteoraDlmmClaimRewardEvent {
+    #[cfg_attr(feature = "parse-borsh", borsh(skip))]
+    pub metadata: EventMetadata,
+    pub pool: Pubkey,
+    pub position: Pubkey,
+    pub owner: Pubkey,
+    pub reward_index: u64,
+    pub total_reward: u64,
+    pub active_bin_id: i32,
 }

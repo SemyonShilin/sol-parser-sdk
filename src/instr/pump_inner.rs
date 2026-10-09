@@ -46,9 +46,11 @@ pub mod discriminators {
     pub const CREATE_TOKEN_EVENT: [u8; 16] =
         [27, 114, 169, 77, 222, 235, 99, 118, 155, 167, 108, 32, 122, 76, 173, 64];
 
-    /// MigrateEvent discriminator (PumpAmm migration)
+    /// MigrateEvent discriminator (PumpAmm migration), as its event CPI carries it:
+    /// the Anchor event-instruction tag, then the event discriminator. The CPI
+    /// survives log truncation, which cuts this event's late log line.
     pub const COMPLETE_PUMP_AMM_MIGRATION_EVENT: [u8; 16] =
-        [189, 233, 93, 185, 92, 148, 234, 148, 155, 167, 108, 32, 122, 76, 173, 64];
+        [228, 69, 165, 46, 81, 203, 154, 29, 189, 233, 93, 185, 92, 148, 234, 148];
 }
 
 // ============================================================================
@@ -132,6 +134,19 @@ pub fn parse_pumpfun_inner_instruction(
     metadata: EventMetadata,
     is_created_buy: bool,
 ) -> Option<DexEvent> {
+    let disc = if discriminator[..8] == [228, 69, 165, 46, 81, 203, 154, 29] {
+        Some(u64::from_le_bytes(discriminator[8..].try_into().ok()?))
+    } else if discriminator[8..] == [155, 167, 108, 32, 122, 76, 173, 64] {
+        Some(u64::from_le_bytes(discriminator[..8].try_into().ok()?))
+    } else {
+        None
+    };
+    let program = solana_sdk::pubkey!("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P");
+    if let Some(disc) = disc {
+        if crate::logs::pump_upgrade::event_type(disc, Some(&program)).is_some() {
+            return crate::logs::pump_upgrade::parse(disc, data, metadata, Some(&program));
+        }
+    }
     match *discriminator {
         discriminators::TRADE_EVENT => parse_trade_event_inner(data, metadata, is_created_buy),
         discriminators::CREATE_TOKEN_EVENT => parse_create_event_inner(data, metadata),
@@ -340,6 +355,10 @@ fn parse_trade_event_inner_zero_copy(
             real_quote_reserves,
             holder_rewards_bps,
             holder_rewards,
+            creator_fee_unclaimed: data
+                .get(offset..offset + 8)
+                .map(|b| u64::from_le_bytes(b.try_into().unwrap()))
+                .unwrap_or(0),
             is_cashback_coin: cashback_fee_basis_points > 0,
             ..Default::default() // 其他账户字段由 instruction 提供
         };
@@ -624,6 +643,7 @@ fn parse_create_event_inner_zero_copy(data: &[u8], metadata: EventMetadata) -> O
             virtual_quote_reserves,
             creator_fee_bps,
             is_holder_reward,
+            depth: data.get(offset + 1).copied().unwrap_or(0),
             ix_name: "create".to_string(),
             ..Default::default()
         }))
